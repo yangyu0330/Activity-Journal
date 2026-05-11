@@ -2297,6 +2297,7 @@ def test_public_repo_safety_artifacts() -> None:
     assert "*.sqlite3" in gitignore
     assert "pystray" in requirements
     assert "Pillow" in requirements
+    assert "tzdata" in requirements
     assert example["external_inputs"]["enabled"] is False
     assert example["external_inputs"]["include_raw_text"] is False
     assert example["codex"]["include_history_text"] is False
