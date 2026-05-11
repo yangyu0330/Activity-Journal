@@ -17,6 +17,7 @@ It writes daily and weekly Markdown drafts, builds project-level rollups, indexe
 - Weekly reviews under `journal/weekly/YYYY-Www.md`
 - Project rollups under `journal/projects/`
 - A local health report for scheduler, Notion, SQLite, capture, and file access
+- A local browser dashboard for health, daily sections, project rollups, questions, and SQLite search
 - Optional Windows scheduled tasks, tray controls, and browser-extension capture
 - Privacy-first defaults: generated journals, raw logs, local config, databases, and secrets stay untracked
 
@@ -25,10 +26,13 @@ It writes daily and weekly Markdown drafts, builds project-level rollups, indexe
 ```text
 browser_extension/   Optional local ChatGPT/Gemini capture extension source
 config/              Public example config only; private config is ignored
-docs/                Publishing and privacy/security notes
+docs/                Architecture, demo output, publishing, and privacy/security notes
 prompts/             Codex review prompt template
 scripts/             Collectors, sync jobs, health checks, tray/settings apps
 ```
+
+See `docs/demo-daily-log.md` for a synthetic daily output example.
+See `CONTRIBUTING.md` before proposing changes that touch capture, sync, or local data handling.
 
 ## Public Repository Safety
 
@@ -127,6 +131,14 @@ Run local smoke tests:
 ```powershell
 python scripts/smoke_tests.py
 ```
+
+Open the local dashboard:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/open_dashboard.ps1
+```
+
+The dashboard runs on `127.0.0.1:8776` by default. It reads local Markdown, health status, project rollups, and SQLite search results without uploading data.
 
 Check whether the automation is healthy:
 
@@ -265,6 +277,12 @@ Open the local settings UI:
 python scripts/settings_app.py
 ```
 
+Open the dashboard directly:
+
+```powershell
+python scripts/dashboard_app.py
+```
+
 Validate the config without opening the UI:
 
 ```powershell
@@ -293,7 +311,7 @@ Start the tray icon manually:
 python scripts/tray_app.py
 ```
 
-The tray menu supports quick pause for 15/30/60 minutes, pause until tomorrow, resume now, opening Settings, refreshing status, and running a health check. `scripts/install_local.ps1` also installs the tray dependencies (`pystray`, `Pillow`), creates a Start Menu shortcut, and adds a Windows startup launcher.
+The tray menu supports opening the dashboard, quick pause for 15/30/60 minutes, pause until tomorrow, resume now, opening Settings, refreshing status, and running a health check. `scripts/install_local.ps1` also installs the tray dependencies (`pystray`, `Pillow`), creates Start Menu shortcuts, and adds a Windows startup launcher.
 
 ## Schedule on Windows
 

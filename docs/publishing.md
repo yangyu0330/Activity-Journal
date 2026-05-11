@@ -7,7 +7,11 @@ Use this checklist before pushing Activity Journal to GitHub.
 These paths are intended for the repository:
 
 - `README.md`
+- `LICENSE`
+- `CONTRIBUTING.md`
 - `.gitignore`
+- `.gitattributes`
+- `.github/workflows/`
 - `requirements.txt`
 - `config/activity-journal.example.json`
 - `scripts/`
@@ -44,7 +48,7 @@ git status --short --ignored
 Run a targeted scan for sensitive paths and keywords:
 
 ```powershell
-rg -n -i "(token|secret|password|private key|BEGIN .*PRIVATE KEY|\.pem|\.sqlite|journal/raw)" README.md docs scripts browser_extension config/activity-journal.example.json prompts .gitignore requirements.txt
+rg -n -i "(token|secret|password|private key|BEGIN .*PRIVATE KEY|\.pem|\.sqlite|journal/raw)" README.md docs scripts browser_extension config/activity-journal.example.json prompts .gitignore .gitattributes .github CONTRIBUTING.md LICENSE requirements.txt
 ```
 
 Expected matches should be documentation or code references to environment variable names such as `NOTION_TOKEN`. Real token values, private keys, raw logs, and SQLite files should not be staged.

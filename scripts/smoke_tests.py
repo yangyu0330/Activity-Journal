@@ -21,6 +21,7 @@ import activity_watch
 import chatgpt_live_server
 import collect_daily
 import capture_controls
+import dashboard_app
 import notion_sync
 import project_health
 import project_review
@@ -2230,13 +2231,45 @@ def test_install_scripts_include_tray_assets() -> None:
     setup = (collect_daily.ROOT / "scripts" / "setup_task.ps1").read_text(encoding="utf-8")
     uninstall = (collect_daily.ROOT / "scripts" / "uninstall_local.ps1").read_text(encoding="utf-8")
     assert "Activity Journal Tray.vbs" in install
+    assert "Activity Journal Dashboard.lnk" in install
+    assert "dashboard_app.py" in install
     assert "pystray pillow" in install
     assert "activity-journal.example.json" in install
     assert "Move-ExtensionArtifacts" in install
     assert "ActivityJournal\\browser_extension" in install
     assert "activity-journal.example.json" in setup
     assert "Activity Journal Tray.vbs" in uninstall
+    assert "Activity Journal Dashboard.lnk" in uninstall
     assert "Activity Journal Tray.lnk" in uninstall
+
+
+def test_dashboard_renders_core_sections() -> None:
+    markdown = "# Daily\n\n## Studied\n- Read docs\n\n## Built\n- Added dashboard\n"
+    sections = dashboard_app.parse_markdown_sections(markdown)
+    assert sections["Studied"] == "- Read docs"
+    assert sections["Built"] == "- Added dashboard"
+    payload = {
+        "date": "2099-01-01",
+        "week": "2099-W01",
+        "health": {
+            "overall": "OK",
+            "recommended_actions": [],
+            "sections": {
+                "daily_collection": {"status": "OK"},
+                "sqlite_database": {"status": "OK"},
+            },
+        },
+        "daily": {"path": "journal/daily/2099-01-01.md", "exists": True, "sections": sections, "excerpt": markdown},
+        "weekly": {"path": "journal/weekly/2099-W01.md", "exists": False, "excerpt": ""},
+        "questions": {"path": "journal/questions/2099-01-01.md", "exists": False, "excerpt": ""},
+        "projects": {"path": "journal/raw/project_rollup_2099-01-01.json", "exists": False, "projects": []},
+        "recent": {"daily": [], "weekly": [], "projects": []},
+        "search": {"query": "", "error": None, "results": []},
+    }
+    rendered = dashboard_app.render_page(payload, "").decode("utf-8")
+    assert "Activity Journal Dashboard" in rendered
+    assert "Daily Sections" in rendered
+    assert "Added dashboard" in rendered
 
 
 def test_public_repo_safety_artifacts() -> None:
@@ -2261,6 +2294,10 @@ def test_public_repo_safety_artifacts() -> None:
     assert example["notion"]["parent_page_id"] == ""
     assert (root / "docs" / "privacy-security.md").exists()
     assert (root / "docs" / "publishing.md").exists()
+    assert (root / "docs" / "architecture.md").exists()
+    assert (root / "docs" / "demo-daily-log.md").exists()
+    assert (root / "LICENSE").exists()
+    assert (root / ".github" / "workflows" / "ci.yml").exists()
 
 
 def test_chatgpt_live_server_uses_local_extension_artifact_dir() -> None:
@@ -2723,6 +2760,7 @@ def main() -> None:
     test_health_startup_launcher_checks_expected_arguments()
     test_health_tray_reports_dependencies_and_launcher()
     test_install_scripts_include_tray_assets()
+    test_dashboard_renders_core_sections()
     test_public_repo_safety_artifacts()
     test_chatgpt_live_server_uses_local_extension_artifact_dir()
     test_health_json_only_no_write_outputs_parseable_json_without_token_value()

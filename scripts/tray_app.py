@@ -152,6 +152,14 @@ def launch_settings() -> subprocess.Popen[str]:
     return subprocess.Popen(command, **kwargs)
 
 
+def launch_dashboard() -> subprocess.Popen[str]:
+    command = [pythonw_path(), str(ROOT / "scripts" / "dashboard_app.py"), "--quiet"]
+    kwargs: dict[str, Any] = {"cwd": ROOT}
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    return subprocess.Popen(command, **kwargs)
+
+
 def health_summary(config_path: Path = CONFIG_PATH) -> dict[str, Any]:
     import project_health
 
@@ -227,6 +235,13 @@ class TrayController:
         except Exception as exc:
             self.notify(icon, f"{APP_NAME} error", str(exc))
 
+    def open_dashboard(self, icon: Any, _item: Any) -> None:
+        try:
+            launch_dashboard()
+            self.notify(icon, APP_NAME, "Dashboard opened.")
+        except Exception as exc:
+            self.notify(icon, f"{APP_NAME} error", str(exc))
+
     def run_health_check(self, icon: Any, _item: Any) -> None:
         try:
             summary = health_summary(self.config_path)
@@ -249,6 +264,7 @@ class TrayController:
         return self.pystray.Menu(
             self.pystray.MenuItem(status_label(self.current_config()), self.refresh_from_menu, enabled=False),
             self.pystray.Menu.SEPARATOR,
+            self.pystray.MenuItem("Open Dashboard", self.open_dashboard),
             self.pystray.MenuItem("Open Settings", self.open_settings),
             self.pystray.MenuItem("Refresh Status", self.refresh_from_menu),
             self.pystray.MenuItem("Run Health Check", self.run_health_check),

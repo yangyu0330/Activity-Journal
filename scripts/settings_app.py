@@ -173,6 +173,7 @@ class SettingsApp:
         ttk.Button(buttons, text="Preview Install", command=lambda: self.run_script("install_local.ps1", ["-WhatIf"])).pack(side="left")
         ttk.Button(buttons, text="Install/Repair", command=lambda: self.run_script("install_local.ps1", [])).pack(side="left", padx=(8, 0))
         ttk.Button(buttons, text="Preview Uninstall", command=lambda: self.run_script("uninstall_local.ps1", ["-WhatIf"])).pack(side="left", padx=(8, 0))
+        ttk.Button(buttons, text="Open Dashboard", command=self.open_dashboard).pack(side="left", padx=(8, 0))
         ttk.Button(buttons, text="Start Tray", command=self.start_tray).pack(side="left", padx=(8, 0))
         ttk.Button(buttons, text="Check Tray Deps", command=self.check_tray_deps).pack(side="left", padx=(8, 0))
 
@@ -301,6 +302,14 @@ class SettingsApp:
             messagebox.showerror("Activity Journal Tray", str(exc))
             return
         messagebox.showinfo("Activity Journal Tray", "Tray started.")
+
+    def open_dashboard(self) -> None:
+        try:
+            tray_app.launch_dashboard()
+        except OSError as exc:
+            messagebox.showerror("Activity Journal Dashboard", str(exc))
+            return
+        messagebox.showinfo("Activity Journal Dashboard", "Dashboard opened.")
 
     def check_tray_deps(self) -> None:
         deps = tray_app.dependency_status()

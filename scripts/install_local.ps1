@@ -11,12 +11,14 @@ $ExampleConfigPath = Join-Path $ConfigDir "activity-journal.example.json"
 $RequirementsPath = Join-Path $Repo "requirements.txt"
 $SetupTaskScript = Join-Path $Repo "scripts\setup_task.ps1"
 $SettingsAppScript = Join-Path $Repo "scripts\settings_app.py"
+$DashboardAppScript = Join-Path $Repo "scripts\dashboard_app.py"
 $TrayAppScript = Join-Path $Repo "scripts\tray_app.py"
 $Python = "python"
 $PythonwCommand = Get-Command "pythonw.exe" -ErrorAction SilentlyContinue
 $Pythonw = if ($PythonwCommand) { $PythonwCommand.Source } else { "python" }
 $StartMenu = Join-Path ([Environment]::GetFolderPath("Programs")) "Activity Journal"
 $ShortcutPath = Join-Path $StartMenu "Activity Journal Settings.lnk"
+$DashboardShortcutPath = Join-Path $StartMenu "Activity Journal Dashboard.lnk"
 $TrayShortcutPath = Join-Path $StartMenu "Activity Journal Tray.lnk"
 $StartupFolder = [Environment]::GetFolderPath("Startup")
 $TrayLauncherPath = Join-Path $StartupFolder "Activity Journal Tray.vbs"
@@ -162,6 +164,21 @@ function Write-SettingsShortcut {
     $Shortcut.Save()
 }
 
+function Write-DashboardShortcut {
+    if ($WhatIf) {
+        Write-Host "Would create Start Menu shortcut: $DashboardShortcutPath"
+        return
+    }
+    New-Item -ItemType Directory -Force -Path $StartMenu | Out-Null
+    $Shell = New-Object -ComObject WScript.Shell
+    $Shortcut = $Shell.CreateShortcut($DashboardShortcutPath)
+    $Shortcut.TargetPath = $Pythonw
+    $Shortcut.Arguments = "`"$DashboardAppScript`" --quiet"
+    $Shortcut.WorkingDirectory = $Repo
+    $Shortcut.Description = "Activity Journal Dashboard"
+    $Shortcut.Save()
+}
+
 function Write-TrayShortcut {
     if ($WhatIf) {
         Write-Host "Would create Start Menu shortcut: $TrayShortcutPath"
@@ -201,6 +218,7 @@ if ($WhatIf) {
     Write-Host "Would register scheduled tasks with scripts\setup_task.ps1 -WhatIf."
     powershell -ExecutionPolicy Bypass -File $SetupTaskScript -WhatIf
     Write-SettingsShortcut
+    Write-DashboardShortcut
     Write-TrayShortcut
     Write-TrayStartupLauncher
     exit 0
@@ -216,11 +234,13 @@ if ($LASTEXITCODE -ne 0) {
     throw "Task setup failed with exit code $LASTEXITCODE."
 }
 Write-SettingsShortcut
+Write-DashboardShortcut
 Write-TrayShortcut
 Write-TrayStartupLauncher
 
 Write-Host "Activity Journal local MVP installed."
 Write-Host "Config: $ConfigPath"
 Write-Host "Settings shortcut: $ShortcutPath"
+Write-Host "Dashboard shortcut: $DashboardShortcutPath"
 Write-Host "Tray shortcut: $TrayShortcutPath"
 Write-Host "Tray startup launcher: $TrayLauncherPath"

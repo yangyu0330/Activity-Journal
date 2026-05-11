@@ -21,6 +21,7 @@ $StartupLaunchers = @(
 $StartMenu = Join-Path ([Environment]::GetFolderPath("Programs")) "Activity Journal"
 $ShortcutPaths = @(
     (Join-Path $StartMenu "Activity Journal Settings.lnk"),
+    (Join-Path $StartMenu "Activity Journal Dashboard.lnk"),
     (Join-Path $StartMenu "Activity Journal Tray.lnk")
 )
 

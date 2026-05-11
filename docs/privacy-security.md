@@ -47,7 +47,7 @@ Before publishing, run a status check and a secret scan:
 ```powershell
 python scripts/settings_app.py --validate-config
 python scripts/project_health.py --date 2026-05-09 --no-write
-rg -n -i "(token|secret|password|private key|BEGIN .*PRIVATE KEY|\\.pem|\\.sqlite|journal/raw)" README.md docs scripts browser_extension config/activity-journal.example.json prompts .gitignore requirements.txt
+rg -n -i "(token|secret|password|private key|BEGIN .*PRIVATE KEY|\\.pem|\\.sqlite|journal/raw)" README.md docs scripts browser_extension config/activity-journal.example.json prompts .gitignore .gitattributes .github CONTRIBUTING.md LICENSE requirements.txt
 ```
 
 Review matches manually. Code references to environment variable names such as `NOTION_TOKEN` are expected; real token values and private keys are not.
