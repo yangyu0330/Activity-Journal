@@ -525,11 +525,20 @@ def test_notion_load_state_rejects_invalid_shape() -> None:
 
 def test_notion_main_reports_invalid_state_without_traceback() -> None:
     original_load_state = notion_sync.load_state
+    original_load_config = notion_sync.load_config
 
     def fake_load_state() -> dict[str, str]:
         raise RuntimeError("Notion state file is not valid JSON: test")
 
     notion_sync.load_state = fake_load_state
+    notion_sync.load_config = lambda: {
+        "notion": {
+            "enabled": True,
+            "parent_page_id": "parent",
+            "use_databases": True,
+            "sync_policy": {"mode": "delayed_final"},
+        }
+    }
     stderr = StringIO()
     stdout = StringIO()
     original_token = os.environ.get("NOTION_TOKEN")
@@ -549,6 +558,7 @@ def test_notion_main_reports_invalid_state_without_traceback() -> None:
             raise AssertionError("expected SystemExit")
     finally:
         notion_sync.load_state = original_load_state
+        notion_sync.load_config = original_load_config
         if original_token is None:
             os.environ.pop("NOTION_TOKEN", None)
         else:
