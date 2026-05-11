@@ -2257,10 +2257,10 @@ def test_install_scripts_include_tray_assets() -> None:
 
 
 def test_dashboard_renders_core_sections() -> None:
-    markdown = "# Daily\n\n## Studied\n- Read docs\n\n## Built\n- Added dashboard\n"
+    markdown = "# Daily\n\n## Studied\n- Read docs\n\n## Built\n- Added dashboard\n- Demo: 2 changed files\n\n## Problems\n- No unresolved problems captured.\n"
     sections = dashboard_app.parse_markdown_sections(markdown)
     assert sections["Studied"] == "- Read docs"
-    assert sections["Built"] == "- Added dashboard"
+    assert "Added dashboard" in sections["Built"]
     payload = {
         "date": "2099-01-01",
         "week": "2099-W01",
@@ -2273,9 +2273,42 @@ def test_dashboard_renders_core_sections() -> None:
             },
         },
         "daily": {"path": "journal/daily/2099-01-01.md", "exists": True, "sections": sections, "excerpt": markdown},
-        "weekly": {"path": "journal/weekly/2099-W01.md", "exists": False, "excerpt": ""},
-        "questions": {"path": "journal/questions/2099-01-01.md", "exists": False, "excerpt": ""},
-        "projects": {"path": "journal/raw/project_rollup_2099-01-01.json", "exists": False, "projects": []},
+        "weekly": {
+            "path": "journal/weekly/2099-W01.md",
+            "exists": True,
+            "excerpt": "# Weekly\n\n## Summary\n- Daily logs: 0\n",
+            "actual_daily_count": 1,
+            "recorded_daily_count": 0,
+            "stale": True,
+            "daily_paths": ["journal/daily/2099-01-01.md"],
+        },
+        "questions": {
+            "path": "journal/questions/2099-01-01.md",
+            "exists": True,
+            "excerpt": "# Questions\n\n```text\n## Q: <stable_id>\nAnswer:\n```\n",
+        },
+        "question_candidates": {
+            "path": "journal/raw/question_candidates_2099-01-01.json",
+            "exists": True,
+            "candidates": [{"id": "project_goal_demo", "reason": "Need goal", "recommended_answer": "Set a goal"}],
+        },
+        "projects": {
+            "path": "journal/raw/project_rollup_2099-01-01.json",
+            "exists": True,
+            "projects": [
+                {
+                    "name": "Demo",
+                    "status": "Active",
+                    "goal": "",
+                    "evidence_count": 3,
+                    "recent_progress": ["2099-01-01: Demo: 2 changed files"],
+                    "progress_count": 1,
+                    "daily_log_count": 1,
+                    "weekly_review_count": 1,
+                    "open_problem_count": 0,
+                }
+            ],
+        },
         "recent": {"daily": [], "weekly": [], "projects": []},
         "search": {"query": "", "error": None, "results": []},
     }
@@ -2284,6 +2317,12 @@ def test_dashboard_renders_core_sections() -> None:
     assert "오늘 기록" in rendered
     assert "오늘 확인할 것" in rendered
     assert "Added dashboard" in rendered
+    assert "Demo: 파일 2개 변경" in rendered
+    assert "project_goal_demo" in rendered
+    assert "최신 일일 기록을 반영하지 않았습니다" in rendered
+    assert "## Q: <stable_id>" not in rendered
+    assert "No unresolved problems captured." not in rendered
+    assert "근거 0" not in rendered
 
 
 def test_public_repo_safety_artifacts() -> None:

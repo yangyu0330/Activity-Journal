@@ -5,6 +5,7 @@ import datetime as dt
 import html
 import json
 import os
+import re
 import sys
 import threading
 import webbrowser
@@ -65,6 +66,57 @@ DAILY_SECTION_LABELS = {
     "Sources": "근거",
 }
 
+WEEKLY_SECTION_LABELS = {
+    "Summary": "주간 요약",
+    "Main Projects": "주요 프로젝트",
+    "What I Studied": "공부/조사",
+    "What I Built": "만든 것",
+    "Key Decisions": "결정",
+    "Repeated Problems": "반복 문제",
+    "Next Week Priorities": "다음 우선순위",
+    "Linked Daily Logs": "연결된 일일 기록",
+}
+
+PROJECT_STATUS_LABELS = {
+    "Active": "진행 중",
+    "Paused": "보류",
+    "Done": "완료",
+}
+
+DAILY_SECTION_ORDER = ["Projects", "Studied", "Built", "Decisions", "Problems", "Next Actions", "Sources"]
+WEEKLY_SECTION_ORDER = [
+    "Summary",
+    "Main Projects",
+    "What I Studied",
+    "What I Built",
+    "Key Decisions",
+    "Repeated Problems",
+    "Next Week Priorities",
+    "Linked Daily Logs",
+]
+
+PLACEHOLDER_TEXTS = {
+    "-",
+    "no project inferred.",
+    "no projects captured.",
+    "no study signal inferred.",
+    "no study items captured.",
+    "no build signal inferred.",
+    "no build items captured.",
+    "no decisions captured.",
+    "codex review has not finalized this draft yet.",
+    "open codex review and answer only the missing clarification questions.",
+    "answer pending clarification questions when prompted.",
+    "no unresolved problems captured.",
+    "no repeated problems captured.",
+    "no next action inferred.",
+    "no next actions captured.",
+    "no source signal inferred.",
+    "no daily logs found for this week.",
+    "automatic local evidence capture and notion sync remain the active logging workflow.",
+    "continue scheduled automatic capture and notion sync.",
+}
+
 
 def configure_utf8_console() -> None:
     for stream in (sys.stdout, sys.stderr):
@@ -112,6 +164,155 @@ def parse_markdown_sections(markdown: str) -> dict[str, str]:
     return {key: "\n".join(value).strip() for key, value in sections.items()}
 
 
+def strip_bullet(line: str) -> str:
+    return re.sub(r"^\s*[-*]\s+", "", line).strip()
+
+
+def is_placeholder_line(line: str) -> bool:
+    text = strip_bullet(line)
+    normalized = re.sub(r"\s+", " ", text).strip().lower()
+    return normalized in PLACEHOLDER_TEXTS
+
+
+def as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def count_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def week_bounds(day: dt.date) -> tuple[dt.date, dt.date]:
+    start = day - dt.timedelta(days=day.weekday())
+    return start, start + dt.timedelta(days=6)
+
+
+def weekly_daily_files(day: dt.date) -> list[Path]:
+    start, end = week_bounds(day)
+    daily_dir = ROOT / "journal" / "daily"
+    files: list[Path] = []
+    current = start
+    while current <= end:
+        path = daily_dir / f"{current.isoformat()}.md"
+        if path.exists():
+            files.append(path)
+        current += dt.timedelta(days=1)
+    return files
+
+
+def weekly_logged_daily_count(markdown: str) -> int | None:
+    match = re.search(r"^- Daily logs:\s*(\d+)\s*$", markdown, re.M)
+    return int(match.group(1)) if match else None
+
+
+def load_question_candidates(day: dt.date) -> dict[str, Any]:
+    path = ROOT / "journal" / "raw" / f"question_candidates_{day.isoformat()}.json"
+    if not path.exists():
+        return {"path": rel(path), "exists": False, "candidates": []}
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return {"path": rel(path), "exists": True, "error": str(exc), "candidates": []}
+    candidates = report.get("candidates", [])
+    if not isinstance(candidates, list):
+        candidates = []
+    return {"path": rel(path), "exists": True, "candidates": candidates}
+
+
+def translate_progress_item(value: Any) -> str:
+    text = str(value or "").strip()
+    match = re.fullmatch(r"(\d{4}-\d{2}-\d{2}): (.+?): (\d+) changed files", text)
+    if match:
+        return f"{match.group(1)}: {match.group(2)} 파일 {match.group(3)}개 변경"
+    match = re.fullmatch(r"(\d{4}-\d{2}-\d{2}): (.+?): (\d+) modified files", text)
+    if match:
+        return f"{match.group(1)}: {match.group(2)} 파일 {match.group(3)}개 수정"
+    match = re.fullmatch(r"(\d{4}-\d{2}-\d{2}): studied - (.+)", text)
+    if match:
+        return f"{match.group(1)}: 조사 - {translate_daily_item(match.group(2))}"
+    return text
+
+
+def translate_daily_item(line: str) -> str:
+    text = re.sub(r"`([^`]+)`", r"\1", strip_bullet(line))
+    translated_progress = translate_progress_item(text)
+    if translated_progress != text:
+        return translated_progress
+    replacements = [
+        (r"Browser activity: (\d+) page\(s\) visited", "브라우저 방문 {0}건"),
+        (r"Recent files: (\d+) file\(s\) changed", "최근 파일 변경 {0}건"),
+        (r"App activity: (\d+) active window\(s\)", "앱 창 활동 {0}건"),
+        (r"Visible app text captured from (\d+) active window\(s\)", "화면 텍스트 캡처 {0}건"),
+        (r"Codex history items: (\d+)", "Codex 기록 {0}개"),
+        (r"Recent files tracked: (\d+)", "최근 파일 추적 {0}개"),
+        (r"Activity watch windows: (\d+)", "앱 활동 창 {0}개"),
+        (r"Daily logs: (\d+)", "일일 기록 {0}개"),
+        (r"Projects: (\d+)", "프로젝트 {0}개"),
+        (r"Studied: (\d+)", "공부/조사 {0}개"),
+        (r"Built: (\d+)", "만든 것 {0}개"),
+        (r"Decisions: (\d+)", "결정 {0}개"),
+        (r"Unresolved problems: (\d+)", "미해결 문제 {0}개"),
+        (r"Next actions: (\d+)", "다음 행동 {0}개"),
+        (r"(.+): (\d+) changed files", "{0}: 파일 {1}개 변경"),
+        (r"(.+): (\d+) modified files", "{0}: 파일 {1}개 수정"),
+    ]
+    for pattern, template in replacements:
+        match = re.fullmatch(pattern, text)
+        if match:
+            return template.format(*match.groups())
+    prefix_map = {
+        "Visited: ": "방문: ",
+        "File changed: ": "변경 파일: ",
+        "Used app: ": "사용 앱: ",
+        "Browser history: ": "브라우저 기록: ",
+        "Git: ": "Git 저장소: ",
+    }
+    for prefix, replacement in prefix_map.items():
+        if text.startswith(prefix):
+            return replacement + text[len(prefix) :]
+    return text
+
+
+def display_lines(markdown: str, limit: int = 8) -> tuple[list[str], int]:
+    seen: set[str] = set()
+    lines: list[str] = []
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#") or stripped.startswith("Status:") or stripped.startswith("Range:"):
+            continue
+        if not stripped or is_placeholder_line(stripped):
+            continue
+        item = translate_daily_item(stripped)
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        lines.append(item)
+    return lines[:limit], max(0, len(lines) - limit)
+
+
+def empty_section_message(name: str) -> str:
+    messages = {
+        "Projects": "오늘 연결된 프로젝트가 없습니다.",
+        "Studied": "오늘 기록된 공부/조사 항목이 없습니다.",
+        "Built": "오늘 기록된 구현/파일 변경 요약이 없습니다.",
+        "Decisions": "오늘 새로 확정한 결정은 없습니다.",
+        "Problems": "현재 기록된 미해결 문제는 없습니다.",
+        "Next Actions": "오늘 추가로 잡힌 다음 행동은 없습니다.",
+        "Sources": "표시할 근거 항목이 없습니다.",
+        "Main Projects": "이번 주 주요 프로젝트가 아직 없습니다.",
+        "What I Studied": "이번 주 공부/조사 항목이 아직 없습니다.",
+        "What I Built": "이번 주 구현 항목이 아직 없습니다.",
+        "Key Decisions": "이번 주 결정 항목이 아직 없습니다.",
+        "Repeated Problems": "반복되는 문제가 기록되지 않았습니다.",
+        "Next Week Priorities": "다음 우선순위가 아직 없습니다.",
+        "Linked Daily Logs": "연결된 일일 기록이 없습니다.",
+    }
+    return messages.get(name, "표시할 내용이 없습니다.")
+
+
 def list_recent_markdown(directory: Path, limit: int = 8) -> list[dict[str, str]]:
     if not directory.exists():
         return []
@@ -140,12 +341,38 @@ def load_project_rollup(day: dt.date) -> dict[str, Any]:
     rows = []
     for name, payload in sorted(projects.items()):
         item = payload if isinstance(payload, dict) else {}
+        recent_progress = [str(value) for value in as_list(item.get("recent_progress"))]
+        key_decisions = [str(value) for value in as_list(item.get("key_decisions"))]
+        open_problems = [str(value) for value in as_list(item.get("open_problems"))]
+        next_actions = [str(value) for value in as_list(item.get("next_actions"))]
+        linked_daily_logs = [str(value) for value in as_list(item.get("linked_daily_logs"))]
+        linked_weekly_reviews = [str(value) for value in as_list(item.get("linked_weekly_reviews"))]
+        links = [str(value) for value in as_list(item.get("links"))]
+        evidence_count = sum(
+            len(values)
+            for values in [
+                recent_progress,
+                key_decisions,
+                open_problems,
+                next_actions,
+                linked_daily_logs,
+                linked_weekly_reviews,
+                links,
+            ]
+        )
         rows.append(
             {
-                "name": str(name),
+                "name": str(item.get("name") or name),
                 "status": str(item.get("status") or ""),
                 "goal": str(item.get("goal") or ""),
-                "evidence_count": len(item.get("evidence", [])) if isinstance(item.get("evidence"), list) else 0,
+                "evidence_count": evidence_count,
+                "recent_progress": recent_progress[:3],
+                "progress_count": len(recent_progress),
+                "decision_count": len(key_decisions),
+                "open_problem_count": len(open_problems),
+                "next_action_count": len(next_actions),
+                "daily_log_count": len(linked_daily_logs),
+                "weekly_review_count": len(linked_weekly_reviews),
             }
         )
     return {"path": rel(path), "exists": True, "projects": rows}
@@ -177,6 +404,9 @@ def dashboard_data(day: dt.date, query: str = "") -> dict[str, Any]:
     weekly_path = ROOT / "journal" / "weekly" / f"{project_health.iso_week(day)}.md"
     questions_path = ROOT / "journal" / "questions" / f"{day.isoformat()}.md"
     daily_text = read_text(daily_path)
+    weekly_text = read_text(weekly_path, 2400)
+    current_week_files = weekly_daily_files(day)
+    recorded_weekly_count = weekly_logged_daily_count(weekly_text) if weekly_text else None
     sections = parse_markdown_sections(daily_text) if daily_text else {}
     search_rows, search_error = database_search(config, query)
     return {
@@ -192,13 +422,18 @@ def dashboard_data(day: dt.date, query: str = "") -> dict[str, Any]:
         "weekly": {
             "path": rel(weekly_path),
             "exists": weekly_path.exists(),
-            "excerpt": read_text(weekly_path, 2400),
+            "excerpt": weekly_text,
+            "actual_daily_count": len(current_week_files),
+            "recorded_daily_count": recorded_weekly_count,
+            "stale": weekly_path.exists() and recorded_weekly_count is not None and recorded_weekly_count < len(current_week_files),
+            "daily_paths": [rel(path) for path in current_week_files],
         },
         "questions": {
             "path": rel(questions_path),
             "exists": questions_path.exists(),
             "excerpt": read_text(questions_path, 2400),
         },
+        "question_candidates": load_question_candidates(day),
         "projects": load_project_rollup(day),
         "recent": {
             "daily": list_recent_markdown(ROOT / "journal" / "daily"),
@@ -399,6 +634,16 @@ h3 {
   display: grid;
   gap: 8px;
 }
+.clean-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  line-height: 1.45;
+}
+.clean-list li {
+  overflow-wrap: anywhere;
+}
 .row {
   display: grid;
   gap: 3px;
@@ -444,6 +689,11 @@ pre {
   padding: 10px 0;
 }
 .project-row:last-child { border-bottom: 0; }
+.project-meta {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
 .pill {
   display: inline-block;
   border: 1px solid var(--line);
@@ -602,12 +852,17 @@ def render_summary(data: dict[str, Any]) -> str:
     report = data["health"]
     daily = section(report, "daily_collection")
     codex = section(report, "codex_review")
+    question_quality = section(report, "question_quality")
     projects = section(report, "project_review")
     sqlite = section(report, "sqlite_database")
     external = section(report, "external_inputs")
     chrome = section(report, "chrome_extension")
     overall = str(report.get("overall", "Unknown"))
     file_state = "완료" if not daily.get("missing") else "누락"
+    capture_total = sum(
+        count_int(external.get(key))
+        for key in ["inbox_count", "chatgpt_count", "chatgpt_live_count", "browser_history_count", "recent_file_count", "activity_watch_count"]
+    )
     cards = [
         f"""
         <div class="hero-card">
@@ -617,10 +872,14 @@ def render_summary(data: dict[str, Any]) -> str:
         </div>
         """,
         metric_card("일일 파일", file_state, "raw / daily / questions"),
-        metric_card("남은 질문", plural_count(codex.get("pending_questions"), "개"), f"답변됨 {codex.get('answered_questions', 0)}개"),
+        metric_card(
+            "검토 질문",
+            plural_count(codex.get("pending_questions"), "개"),
+            f"후보 {question_quality.get('unresolved_candidate_count', 0)}개 · 답변됨 {codex.get('answered_questions', 0)}개",
+        ),
         metric_card("프로젝트", plural_count(projects.get("project_count"), "개"), f"목표 미정 {projects.get('missing_goal_count', 0)}개"),
         metric_card("검색 색인", plural_count(sqlite.get("checked_event_count"), "건"), f"전체 {sqlite.get('event_count', 0)}건"),
-        metric_card("수집 신호", plural_count(external.get("browser_history_count"), "개"), f"파일 {external.get('recent_file_count', 0)} · 앱 {external.get('activity_watch_count', 0)}"),
+        metric_card("수집 신호", plural_count(capture_total, "개"), f"방문 {external.get('browser_history_count', 0)} · 파일 {external.get('recent_file_count', 0)} · 앱 {external.get('activity_watch_count', 0)}"),
         metric_card("ChatGPT 캡처", plural_count(chrome.get("recent_capture_count"), "건"), f"receiver {status_label(str(chrome.get('receiver', {}).get('status', 'Unknown')))}"),
     ]
     return '<div class="summary">' + "".join(cards) + "</div>"
@@ -644,12 +903,18 @@ def render_attention(report: dict[str, Any]) -> str:
     return '<div class="list">' + "".join(rows) + "</div>"
 
 
+def render_bullet_list(lines: list[str], remaining: int = 0) -> str:
+    items = "".join(f"<li>{esc(line)}</li>" for line in lines)
+    if remaining:
+        items += f'<li class="muted">외 {remaining}개 더 있음</li>'
+    return f'<ul class="clean-list">{items}</ul>'
+
+
 def render_daily_sections(sections: dict[str, str]) -> str:
-    names = ["Studied", "Built", "Decisions", "Problems", "Next Actions", "Projects", "Sources"]
     cards = []
-    for name in names:
-        text = sections.get(name, "").strip()
-        body = f"<pre>{esc(text)}</pre>" if text else '<div class="empty">기록 없음</div>'
+    for name in DAILY_SECTION_ORDER:
+        lines, remaining = display_lines(sections.get(name, ""), limit=8)
+        body = render_bullet_list(lines, remaining) if lines else f'<div class="empty">{esc(empty_section_message(name))}</div>'
         cards.append(f'<div class="daily-card"><h3>{esc(DAILY_SECTION_LABELS.get(name, name))}</h3>{body}</div>')
     return '<div class="section-columns">' + "".join(cards) + "</div>"
 
@@ -662,14 +927,27 @@ def render_projects(projects: dict[str, Any]) -> str:
         return '<div class="empty">이 날짜의 프로젝트 rollup이 없습니다.</div>'
     html_rows = []
     for row in rows:
-        goal = row.get("goal") or "목표 미정"
-        status = row.get("status") or "Active"
+        goal = row.get("goal") or "목표 미정: 프로젝트 목적을 한 문장으로 정하면 회고 품질이 좋아집니다."
+        status = PROJECT_STATUS_LABELS.get(str(row.get("status") or ""), str(row.get("status") or "진행 중"))
+        recent_progress = [translate_progress_item(item) for item in row.get("recent_progress", [])]
+        recent = recent_progress[0] if recent_progress else "최근 진행 요약 없음"
+        meta_parts = [
+            status,
+            f"진행 {row.get('progress_count', 0)}",
+            f"일일 {row.get('daily_log_count', 0)}",
+            f"주간 {row.get('weekly_review_count', 0)}",
+        ]
+        if count_int(row.get("open_problem_count")):
+            meta_parts.append(f"문제 {row.get('open_problem_count')}")
         html_rows.append(
             f"""
             <div class="project-row">
-              <strong>{esc(row.get("name"))}</strong>
+              <div>
+                <strong>{esc(row.get("name"))}</strong>
+                <div class="project-meta">{esc(recent)}</div>
+              </div>
               <span>{esc(goal)}</span>
-              <span class="pill">{esc(status)} · 근거 {esc(row.get("evidence_count", 0))}</span>
+              <span class="pill">{esc(" · ".join(meta_parts))} · 근거 {esc(row.get("evidence_count", 0))}</span>
             </div>
             """
         )
@@ -716,6 +994,87 @@ def render_search(search: dict[str, Any]) -> str:
     return '<div class="list">' + "".join(rendered) + "</div>"
 
 
+def render_questions(data: dict[str, Any]) -> str:
+    questions = data["questions"]
+    excerpt = str(questions.get("excerpt") or "")
+    blocks = project_health.parse_question_blocks(excerpt) if excerpt else []
+    if blocks:
+        rows = []
+        for question in blocks:
+            state = "답변됨" if question.get("answered") else "답변 필요"
+            rows.append(
+                f"""
+                <div class="row">
+                  <strong>{esc(question.get("id"))}</strong>
+                  <span>{esc(state)}</span>
+                </div>
+                """
+            )
+        return '<div class="list">' + "".join(rows) + "</div>"
+
+    candidates = data.get("question_candidates", {})
+    if candidates.get("error"):
+        return f'<div class="empty">{esc(candidates["error"])}</div>'
+    candidate_rows = [item for item in candidates.get("candidates", []) if isinstance(item, dict)]
+    if candidate_rows:
+        rows = []
+        for item in candidate_rows[:5]:
+            reason = str(item.get("reason") or "검토가 필요한 후보입니다.")
+            answer = str(item.get("recommended_answer") or "")
+            rows.append(
+                f"""
+                <div class="row">
+                  <strong>{esc(item.get("id"))}</strong>
+                  <span>{esc(reason)}</span>
+                  <span class="muted">{esc(answer)}</span>
+                </div>
+                """
+            )
+        more = len(candidate_rows) - 5
+        if more > 0:
+            rows.append(f'<div class="row muted">외 {esc(more)}개 후보가 더 있습니다.</div>')
+        return '<div class="list">' + "".join(rows) + "</div>"
+
+    if questions.get("exists"):
+        return '<div class="empty">오늘 답변할 실제 질문은 없습니다. 템플릿 예시는 대시보드에서 숨겼습니다.</div>'
+    return '<div class="empty">이 날짜의 질문 파일이 없습니다.</div>'
+
+
+def render_weekly_panel(weekly: dict[str, Any], date: str) -> str:
+    if not weekly.get("exists"):
+        return '<div class="empty">이번 주 리뷰가 아직 없습니다.</div>'
+    if weekly.get("stale"):
+        actual = weekly.get("actual_daily_count", 0)
+        recorded = weekly.get("recorded_daily_count", 0)
+        paths = render_bullet_list([str(path) for path in weekly.get("daily_paths", [])], 0) if weekly.get("daily_paths") else ""
+        return f"""
+        <div class="empty">
+          이번 주 리뷰가 최신 일일 기록을 반영하지 않았습니다. 현재 일일 기록은 {esc(actual)}개인데 리뷰 파일에는 {esc(recorded)}개로 기록되어 있습니다.
+          <div class="mono">python scripts\\weekly_review.py --date {esc(date)}</div>
+        </div>
+        {paths}
+        """
+    sections = parse_markdown_sections(str(weekly.get("excerpt") or ""))
+    cards = []
+    for name in WEEKLY_SECTION_ORDER:
+        lines, remaining = display_lines(sections.get(name, ""), limit=6)
+        if not lines and name == "Summary":
+            continue
+        body = render_bullet_list(lines, remaining) if lines else f'<div class="empty">{esc(empty_section_message(name))}</div>'
+        cards.append(f'<div class="daily-card"><h3>{esc(WEEKLY_SECTION_LABELS.get(name, name))}</h3>{body}</div>')
+    if not cards:
+        return '<div class="empty">이번 주 리뷰에 표시할 내용이 없습니다.</div>'
+    return '<div class="section-columns">' + "".join(cards) + "</div>"
+
+
+def translate_warning(text: Any) -> str:
+    value = str(text)
+    match = re.fullmatch(r"Recent file item limit reached: (\d+) found, (\d+) collected\.", value)
+    if match:
+        return f"최근 파일 후보가 많아 {match.group(2)}개만 수집했습니다. 전체 후보는 {match.group(1)}개입니다."
+    return value
+
+
 def render_capture_panel(report: dict[str, Any]) -> str:
     external = section(report, "external_inputs")
     chrome = section(report, "chrome_extension")
@@ -734,7 +1093,7 @@ def render_capture_panel(report: dict[str, Any]) -> str:
         f'<div class="row"><strong>{esc(label)}</strong><span>{esc(value)}</span></div>'
         for label, value in rows
     )
-    warnings = "".join(f'<div class="row"><span>{esc(warning)}</span></div>' for warning in external.get("warnings", []) or [])
+    warnings = "".join(f'<div class="row"><span>{esc(translate_warning(warning))}</span></div>' for warning in external.get("warnings", []) or [])
     return '<div class="list">' + body + (warnings or "") + "</div>"
 
 
@@ -790,12 +1149,12 @@ def render_page(data: dict[str, Any], query: str) -> bytes:
       <section class="panel span-6">
         <h2>질문/검토</h2>
         <div class="muted mono">{esc(data["questions"]["path"])}</div>
-        <pre>{esc(data["questions"]["excerpt"] or "이 날짜의 질문 파일이 없습니다.")}</pre>
+        {render_questions(data)}
       </section>
       <section class="panel span-6">
         <h2>이번 주 리뷰</h2>
         <div class="muted mono">{weekly_header}</div>
-        <pre>{esc(data["weekly"]["excerpt"] or "이번 주 리뷰가 아직 없습니다.")}</pre>
+        {render_weekly_panel(data["weekly"], date)}
       </section>
       <section class="panel span-6">
         <h2>수집/연동 상태</h2>
