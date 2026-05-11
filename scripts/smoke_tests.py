@@ -1501,7 +1501,9 @@ def test_notion_invalid_week_reports_cli_error_before_token_check() -> None:
 
 def test_notion_valid_date_without_token_still_skips() -> None:
     original_get_token = notion_sync.get_notion_token
+    original_load_config = notion_sync.load_config
     notion_sync.get_notion_token = lambda: None
+    notion_sync.load_config = lambda: {"notion": {"enabled": True, "parent_page_id": "parent"}}
     stdout = StringIO()
     original_argv = sys.argv
     try:
@@ -1511,6 +1513,7 @@ def test_notion_valid_date_without_token_still_skips() -> None:
     finally:
         sys.argv = original_argv
         notion_sync.get_notion_token = original_get_token
+        notion_sync.load_config = original_load_config
     assert "Notion sync skipped: NOTION_TOKEN is not set." in stdout.getvalue()
 
 
