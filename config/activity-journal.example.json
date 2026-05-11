@@ -1,0 +1,124 @@
+{
+  "timezone": "UTC",
+  "project_roots": [
+    "~/Documents"
+  ],
+  "manual_notes_dir": "manual_notes",
+  "external_inputs": {
+    "enabled": false,
+    "inbox_dir": "inbox",
+    "chatgpt_export_dir": "imports/chatgpt",
+    "include_raw_text": false,
+    "max_items_per_source": 200,
+    "max_text_chars_per_item": 12000,
+    "chatgpt_live": {
+      "enabled": false,
+      "log_path": "journal/raw/chatgpt_live.jsonl",
+      "max_items": 100,
+      "max_text_chars_per_item": 20000,
+      "server_host": "127.0.0.1",
+      "server_port": 8765
+    },
+    "browser_history": {
+      "enabled": false,
+      "max_items": 200,
+      "include_non_web": false
+    },
+    "recent_files": {
+      "enabled": false,
+      "max_items": 200,
+      "max_depth": 4,
+      "roots": [
+        "%USERPROFILE%/Desktop",
+        "%USERPROFILE%/Documents",
+        "%USERPROFILE%/Downloads"
+      ]
+    },
+    "activity_watch": {
+      "enabled": false,
+      "log_path": "journal/raw/activity_watch.jsonl",
+      "max_items": 200,
+      "interval_seconds": 30,
+      "heartbeat_seconds": 300,
+      "include_accessibility_text": false,
+      "max_text_chars_per_item": 20000
+    }
+  },
+  "project_aliases": {},
+  "capture": {
+    "enabled": true,
+    "privacy_mode_until": null,
+    "privacy_mode_reason": ""
+  },
+  "tray": {
+    "enabled": true,
+    "show_notifications": true
+  },
+  "privacy": {
+    "exclusions": {
+      "raw_block_domains": [],
+      "raw_block_apps": [],
+      "summary_hide_domains": [],
+      "summary_hide_apps": []
+    }
+  },
+  "retention": {
+    "enabled": true,
+    "keep_recent_days": 90,
+    "max_raw_mb": 500,
+    "archive_dir": "journal/archive/raw",
+    "delete_archives": false
+  },
+  "database": {
+    "enabled": true,
+    "path": "journal/activity_journal.sqlite3",
+    "text_retention_days": 90,
+    "keep_metadata_after_text_prune": true,
+    "enable_fts": true
+  },
+  "codex": {
+    "home": "~/.codex",
+    "include_history_text": false,
+    "max_history_items": 200
+  },
+  "scan": {
+    "lookback_hours": 24,
+    "max_modified_files_per_project": 200,
+    "ignored_dirs": [
+      ".git",
+      "node_modules",
+      ".next",
+      "dist",
+      "build",
+      "__pycache__",
+      ".venv",
+      "venv",
+      ".turbo",
+      "journal",
+      "cache",
+      "tmp",
+      "logs"
+    ]
+  },
+  "questions": {
+    "enabled": true,
+    "generated_by": "codex_review",
+    "max_questions": 3
+  },
+  "notion": {
+    "enabled": false,
+    "parent_page_id": "",
+    "use_databases": true,
+    "body_mode": "summary",
+    "sync_policy": {
+      "mode": "delayed_final",
+      "finalize_after_days": 3,
+      "update_finalized": false,
+      "max_request_rate_per_second": 2,
+      "split_large_markdown": true,
+      "max_blocks_per_page": 80,
+      "upload_mode": "markdown_api",
+      "final_body_mode": "full"
+    }
+  }
+}

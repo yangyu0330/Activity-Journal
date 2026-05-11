@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Activity Journal ChatGPT Capture",
+  "version": "0.1.5",
+  "description": "Captures ChatGPT/Gemini page text to the local Activity Journal receiver.",
+  "permissions": [],
+  "host_permissions": [
+    "http://127.0.0.1:8765/*",
+    "http://127.0.0.1:8765/extension-test*",
+    "https://chatgpt.com/*",
+    "https://gemini.google.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "http://127.0.0.1:8765/extension-test*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
