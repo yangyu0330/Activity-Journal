@@ -2280,8 +2280,9 @@ def test_dashboard_renders_core_sections() -> None:
         "search": {"query": "", "error": None, "results": []},
     }
     rendered = dashboard_app.render_page(payload, "").decode("utf-8")
-    assert "Activity Journal Dashboard" in rendered
-    assert "Daily Sections" in rendered
+    assert "활동 저널 대시보드" in rendered
+    assert "오늘 기록" in rendered
+    assert "오늘 확인할 것" in rendered
     assert "Added dashboard" in rendered
 
 

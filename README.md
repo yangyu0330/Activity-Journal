@@ -138,7 +138,7 @@ Open the local dashboard:
 powershell -ExecutionPolicy Bypass -File scripts/open_dashboard.ps1
 ```
 
-The dashboard runs on `127.0.0.1:8776` by default. It reads local Markdown, health status, project rollups, and SQLite search results without uploading data.
+The dashboard runs on `127.0.0.1:8776` by default. It presents a Korean-first view of today's status, recommended actions, daily sections, project rollups, capture health, and SQLite search results without uploading data.
 
 Check whether the automation is healthy:
 
